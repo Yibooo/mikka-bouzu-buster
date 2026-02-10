@@ -261,6 +261,9 @@ main {
   z-index: 100;
   padding: 16px;
 }
+.modal-overlay[hidden] {
+  display: none;
+}
 .modal {
   background: var(--c-surface);
   border-radius: var(--radius);
