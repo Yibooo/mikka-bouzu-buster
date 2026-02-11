@@ -2,6 +2,32 @@
 // 三日坊主バスター - app.js
 // ============================================================
 
+// --- Supabase ---
+const SUPABASE_URL = "https://insrskeneuzkjfbbdikp.supabase.co";
+const SUPABASE_KEY = "sb_publishable_9ZjRkan7xPELsoQ2VJcv3A_wg13DQjr";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let currentUser = null;
+let useCloud = false;
+
+async function initAuth() {
+  const { data } = await sb.auth.getSession();
+  if (data.session) {
+    currentUser = data.session.user;
+    useCloud = true;
+  } else {
+    // Try anonymous sign-in
+    const { data: anonData, error } = await sb.auth.signInAnonymously();
+    if (!error && anonData.session) {
+      currentUser = anonData.session.user;
+      useCloud = true;
+    }
+  }
+  sb.auth.onAuthStateChange((_event, session) => {
+    currentUser = session?.user || null;
+    useCloud = !!currentUser;
+  });
+}
+
 // --- i18n ---
 const i18n = {
   ja: {
@@ -99,10 +125,86 @@ const t = (key) => i18n[lang][key] || key;
 
 // --- State ---
 const STORAGE_KEY = "hb_habits";
-let habits = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+let habits = [];
 let editingId = null;
 
-function save() {
+// --- Data Layer (Supabase + localStorage fallback) ---
+async function loadHabits() {
+  if (useCloud && currentUser) {
+    const { data: hRows } = await sb
+      .from("habits")
+      .select("*")
+      .eq("user_id", currentUser.id)
+      .order("created_at", { ascending: true });
+
+    if (hRows) {
+      const { data: cRows } = await sb
+        .from("checkins")
+        .select("habit_id, date")
+        .eq("user_id", currentUser.id);
+
+      const checkinMap = {};
+      (cRows || []).forEach((c) => {
+        if (!checkinMap[c.habit_id]) checkinMap[c.habit_id] = [];
+        checkinMap[c.habit_id].push(c.date);
+      });
+
+      habits = hRows.map((h) => ({
+        id: h.id,
+        name: h.name,
+        period: h.period,
+        deposit: h.deposit,
+        startDate: h.start_date,
+        checkedDays: checkinMap[h.id] || [],
+        resultShown: h.result_shown || false,
+      }));
+      // Sync to localStorage as offline cache
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
+      return;
+    }
+  }
+  // Fallback to localStorage
+  habits = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+}
+
+async function saveHabit(habit) {
+  // Always save to localStorage
+  const idx = habits.findIndex((h) => h.id === habit.id);
+  if (idx >= 0) habits[idx] = habit;
+  else habits.push(habit);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
+
+  if (useCloud && currentUser) {
+    await sb.from("habits").upsert({
+      id: habit.id,
+      user_id: currentUser.id,
+      name: habit.name,
+      period: habit.period,
+      deposit: habit.deposit,
+      start_date: habit.startDate,
+      result_shown: habit.resultShown || false,
+    });
+  }
+}
+
+async function deleteHabitFromDB(id) {
+  habits = habits.filter((h) => h.id !== id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
+
+  if (useCloud && currentUser) {
+    await sb.from("checkins").delete().eq("habit_id", id);
+    await sb.from("habits").delete().eq("id", id);
+  }
+}
+
+async function saveCheckin(habitId, date) {
+  if (useCloud && currentUser) {
+    await sb.from("checkins").upsert({
+      habit_id: habitId,
+      user_id: currentUser.id,
+      date: date,
+    });
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
 }
 
@@ -115,24 +217,14 @@ function dateDiffDays(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000);
 }
 
-function formatDate(dateStr) {
-  const d = new Date(dateStr);
-  if (lang === "ja") {
-    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-  }
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
 function getStreak(habit) {
   let streak = 0;
   const today = todayStr();
   let d = new Date(today);
-  // If checked in today, count today
   if (habit.checkedDays.includes(today)) {
     streak = 1;
     d.setDate(d.getDate() - 1);
   } else {
-    // check from yesterday
     d.setDate(d.getDate() - 1);
   }
   while (true) {
@@ -212,12 +304,11 @@ function renderHabits() {
   const list = document.getElementById("habitList");
   const empty = document.getElementById("emptyState");
 
-  // Check for expired habits and show results
   habits.forEach((h) => {
     if (isExpired(h) && !h.resultShown) {
       showResult(h);
       h.resultShown = true;
-      save();
+      saveHabit(h);
     }
   });
 
@@ -295,7 +386,6 @@ function escHtml(s) {
 
 // --- Events ---
 function attachCardEvents() {
-  // Dropdown toggle
   document.querySelectorAll("[data-toggle='dropdown']").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -307,12 +397,10 @@ function attachCardEvents() {
     });
   });
 
-  // Close dropdowns on outside click
   document.addEventListener("click", () => {
     document.querySelectorAll(".dropdown-menu.show").forEach((m) => m.classList.remove("show"));
   });
 
-  // Card actions
   document.querySelectorAll("[data-action]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const card = btn.closest(".habit-card");
@@ -325,20 +413,18 @@ function attachCardEvents() {
   });
 }
 
-function checkIn(id) {
+async function checkIn(id) {
   const habit = habits.find((h) => h.id === id);
   if (!habit || isTodayChecked(habit) || isExpired(habit)) return;
 
   habit.checkedDays.push(todayStr());
-  save();
+  await saveCheckin(id, todayStr());
   render();
 
-  // Praise
   const praises = t("praise");
   const msg = praises[Math.floor(Math.random() * praises.length)];
   showToast(msg);
 
-  // Milestone check
   const streak = getStreak(habit);
   const milestones = i18n[lang].milestones;
   if (milestones[streak]) {
@@ -413,7 +499,6 @@ function closeModal() {
   editingId = null;
 }
 
-// Period / Deposit button selection
 document.querySelectorAll(".period-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     selectedDays = Number(btn.dataset.days);
@@ -449,8 +534,7 @@ function updateOptionBtns() {
   });
 }
 
-// Form submit
-form.addEventListener("submit", (e) => {
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = document.getElementById("habitNameInput").value.trim();
   if (!name) return;
@@ -467,9 +551,10 @@ form.addEventListener("submit", (e) => {
       h.name = name;
       h.period = days;
       h.deposit = deposit;
+      await saveHabit(h);
     }
   } else {
-    habits.push({
+    const newHabit = {
       id: crypto.randomUUID(),
       name,
       period: days,
@@ -477,19 +562,17 @@ form.addEventListener("submit", (e) => {
       startDate: todayStr(),
       checkedDays: [],
       resultShown: false,
-    });
+    };
+    await saveHabit(newHabit);
   }
 
-  save();
   closeModal();
   render();
 });
 
-// Delete
-function deleteHabit(id) {
+async function deleteHabit(id) {
   if (!confirm(t("deleteConfirm"))) return;
-  habits = habits.filter((h) => h.id !== id);
-  save();
+  await deleteHabitFromDB(id);
   render();
 }
 
@@ -530,4 +613,8 @@ document.getElementById("langToggle").addEventListener("click", () => {
 });
 
 // --- Init ---
-render();
+(async () => {
+  await initAuth();
+  await loadHabits();
+  render();
+})();
