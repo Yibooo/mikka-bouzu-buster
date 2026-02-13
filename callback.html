@@ -83,15 +83,24 @@
   const SUPABASE_KEY = "sb_publishable_9ZjRkan7xPELsoQ2VJcv3A_wg13DQjr";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  let userId = null;
   const { data: sessionData } = await sb.auth.getSession();
-  const userId = sessionData?.session?.user?.id;
+  userId = sessionData?.session?.user?.id;
+
+  // If no session, try anonymous sign-in
+  if (!userId) {
+    const { data: anonData, error: anonError } = await sb.auth.signInAnonymously();
+    if (!anonError && anonData.session) {
+      userId = anonData.session.user.id;
+    }
+  }
 
   if (!userId) {
     spinner.style.display = "none";
-    title.textContent = "エラー: ログインが必要です";
+    title.textContent = "エラー: 認証に失敗しました";
     title.className = "error";
-    message.textContent = "3秒後にダッシュボードに戻ります...";
-    setTimeout(() => { window.location.href = "/"; }, 3000);
+    message.textContent = "ページを再読み込みしてお試しください。";
+    setTimeout(() => { window.location.href = "/"; }, 5000);
     return;
   }
 

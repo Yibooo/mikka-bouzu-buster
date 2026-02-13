@@ -242,18 +242,6 @@ function base64UrlEncode(bytes) {
 
 // --- X OAuth ---
 async function startXOAuth() {
-  if (!currentUser) {
-    // Try anonymous sign-in on demand
-    const { data, error } = await sb.auth.signInAnonymously();
-    if (!error && data.session) {
-      currentUser = data.session.user;
-      useCloud = true;
-    } else {
-      alert(lang === "ja" ? "認証に失敗しました。ページを再読み込みしてください。" : "Auth failed. Please reload the page.");
-      return;
-    }
-  }
-
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const state = crypto.randomUUID();
