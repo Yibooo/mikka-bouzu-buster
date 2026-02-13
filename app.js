@@ -15,6 +15,15 @@ const SITE_URL = "https://mikka-bouzu-buster.com";
 let xConnected = false;
 let xUsername = "";
 
+function getDeviceId() {
+  let id = localStorage.getItem("hb_device_id");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("hb_device_id", id);
+  }
+  return id;
+}
+
 async function initAuth() {
   const { data } = await sb.auth.getSession();
   if (data.session) {
@@ -265,12 +274,11 @@ async function startXOAuth() {
 }
 
 async function checkXConnection() {
-  if (!currentUser) return;
   try {
     const { data } = await sb
       .from("x_tokens")
       .select("x_username")
-      .eq("user_id", currentUser.id)
+      .eq("user_id", getDeviceId())
       .maybeSingle();
 
     if (data) {
@@ -288,11 +296,10 @@ async function checkXConnection() {
 }
 
 async function disconnectX() {
-  if (!currentUser) return;
   const msg = lang === "ja" ? "X連携を解除しますか？" : "Disconnect X account?";
   if (!confirm(msg)) return;
 
-  await sb.from("x_tokens").delete().eq("user_id", currentUser.id);
+  await sb.from("x_tokens").delete().eq("user_id", getDeviceId());
   xConnected = false;
   xUsername = "";
   updateXButton();
@@ -336,7 +343,7 @@ function composeTweet(habit) {
 
 async function postToX(habitId) {
   const habit = habits.find((h) => h.id === habitId);
-  if (!habit || !currentUser) return;
+  if (!habit) return;
 
   const draft = composeTweet(habit);
   const msg = lang === "ja"
@@ -349,7 +356,7 @@ async function postToX(habitId) {
     const res = await fetch("/api/x/tweet", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: currentUser.id, text: draft }),
+      body: JSON.stringify({ user_id: getDeviceId(), text: draft }),
     });
     const data = await res.json();
 

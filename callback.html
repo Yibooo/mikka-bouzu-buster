@@ -35,7 +35,6 @@
   .success { color: #16a34a; }
   .error { color: #dc2626; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 <div class="container">
@@ -78,30 +77,11 @@
   const codeVerifier = sessionStorage.getItem("x_code_verifier");
   const redirectUri = `${window.location.origin}/callback.html`;
 
-  // Get current user
-  const SUPABASE_URL = "https://insrskeneuzkjfbbdikp.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_9ZjRkan7xPELsoQ2VJcv3A_wg13DQjr";
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-  let userId = null;
-  const { data: sessionData } = await sb.auth.getSession();
-  userId = sessionData?.session?.user?.id;
-
-  // If no session, try anonymous sign-in
+  // Get device ID (same as main app)
+  let userId = localStorage.getItem("hb_device_id");
   if (!userId) {
-    const { data: anonData, error: anonError } = await sb.auth.signInAnonymously();
-    if (!anonError && anonData.session) {
-      userId = anonData.session.user.id;
-    }
-  }
-
-  if (!userId) {
-    spinner.style.display = "none";
-    title.textContent = "エラー: 認証に失敗しました";
-    title.className = "error";
-    message.textContent = "ページを再読み込みしてお試しください。";
-    setTimeout(() => { window.location.href = "/"; }, 5000);
-    return;
+    userId = crypto.randomUUID();
+    localStorage.setItem("hb_device_id", userId);
   }
 
   try {
