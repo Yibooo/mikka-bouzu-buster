@@ -9,6 +9,12 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 let useCloud = false;
 
+// --- X (Twitter) Integration ---
+const X_CLIENT_ID = "MWJmNVl2aktfUGptdXJHeTh1V2k6MTpjaQ";
+const SITE_URL = "https://mikka-bouzu-buster.com";
+let xConnected = false;
+let xUsername = "";
+
 async function initAuth() {
   const { data } = await sb.auth.getSession();
   if (data.session) {
@@ -73,6 +79,9 @@ const i18n = {
       14: "2週間達成! 習慣になってきた!",
       30: "30日達成! マスターだ!",
     },
+    xPost: "Xに投稿",
+    xConnected: "X連携済み",
+    xDisconnect: "X連携解除",
   },
   en: {
     appName: "Habit Buster",
@@ -117,6 +126,9 @@ const i18n = {
       14: "2 weeks! It's becoming a habit!",
       30: "30 days! You're a master!",
     },
+    xPost: "Post to X",
+    xConnected: "X Connected",
+    xDisconnect: "Disconnect X",
   },
 };
 
@@ -206,6 +218,154 @@ async function saveCheckin(habitId, date) {
     });
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
+}
+
+// --- PKCE Utilities ---
+function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return base64UrlEncode(array);
+}
+
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+function base64UrlEncode(bytes) {
+  let str = "";
+  bytes.forEach((b) => (str += String.fromCharCode(b)));
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// --- X OAuth ---
+async function startXOAuth() {
+  if (!currentUser) {
+    alert(lang === "ja" ? "ログインが必要です" : "Login required");
+    return;
+  }
+
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+  const state = crypto.randomUUID();
+
+  sessionStorage.setItem("x_code_verifier", codeVerifier);
+  sessionStorage.setItem("x_oauth_state", state);
+
+  const redirectUri = `${window.location.origin}/callback.html`;
+  const scopes = "tweet.read tweet.write users.read offline.access";
+
+  const authUrl =
+    `https://x.com/i/oauth2/authorize?response_type=code` +
+    `&client_id=${encodeURIComponent(X_CLIENT_ID)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=${encodeURIComponent(scopes)}` +
+    `&state=${encodeURIComponent(state)}` +
+    `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+    `&code_challenge_method=S256`;
+
+  window.location.href = authUrl;
+}
+
+async function checkXConnection() {
+  if (!currentUser) return;
+  try {
+    const { data } = await sb
+      .from("x_tokens")
+      .select("x_username")
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+
+    if (data) {
+      xConnected = true;
+      xUsername = data.x_username || "";
+    } else {
+      xConnected = false;
+      xUsername = "";
+    }
+  } catch {
+    xConnected = false;
+    xUsername = "";
+  }
+  updateXButton();
+}
+
+async function disconnectX() {
+  if (!currentUser) return;
+  const msg = lang === "ja" ? "X連携を解除しますか？" : "Disconnect X account?";
+  if (!confirm(msg)) return;
+
+  await sb.from("x_tokens").delete().eq("user_id", currentUser.id);
+  xConnected = false;
+  xUsername = "";
+  updateXButton();
+  render();
+}
+
+function updateXButton() {
+  const btn = document.getElementById("xConnectBtn");
+  if (!btn) return;
+  if (xConnected) {
+    btn.textContent = xUsername ? `𝕏 @${xUsername}` : "𝕏 ✓";
+    btn.title = lang === "ja" ? "クリックして連携解除" : "Click to disconnect";
+  } else {
+    btn.textContent = lang === "ja" ? "𝕏 連携" : "𝕏 Connect";
+    btn.title = lang === "ja" ? "Xアカウントを連携" : "Connect X account";
+  }
+}
+
+function composeTweet(habit) {
+  const streak = getStreak(habit);
+  const { totalDays, elapsed, checked } = getProgress(habit);
+  const rate = elapsed > 0 ? Math.round((checked / elapsed) * 100) : 0;
+
+  let text;
+  if (lang === "ja") {
+    text = `【習慣チャレンジ中】\n`;
+    text += `📋 ${habit.name}\n`;
+    text += streak > 0 ? `🔥 ${streak}日連続達成!\n` : "";
+    text += `📊 達成率: ${rate}% (${checked}/${elapsed}日)\n`;
+    text += `💪 #三日坊主バスター で習慣化に挑戦中!\n`;
+  } else {
+    text = `【Habit Challenge】\n`;
+    text += `📋 ${habit.name}\n`;
+    text += streak > 0 ? `🔥 ${streak}-day streak!\n` : "";
+    text += `📊 Rate: ${rate}% (${checked}/${elapsed}d)\n`;
+    text += `💪 Building habits with #HabitBuster!\n`;
+  }
+  text += SITE_URL;
+  return text;
+}
+
+async function postToX(habitId) {
+  const habit = habits.find((h) => h.id === habitId);
+  if (!habit || !currentUser) return;
+
+  const draft = composeTweet(habit);
+  const msg = lang === "ja"
+    ? `以下の内容をXに投稿します:\n\n${draft}\n\n投稿しますか？`
+    : `Post to X:\n\n${draft}\n\nProceed?`;
+
+  if (!confirm(msg)) return;
+
+  try {
+    const res = await fetch("/api/x/tweet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: currentUser.id, text: draft }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      showToast(lang === "ja" ? "Xに投稿しました!" : "Posted to X!");
+    } else {
+      alert(data.error || (lang === "ja" ? "投稿に失敗しました" : "Failed to post"));
+    }
+  } catch (e) {
+    alert(lang === "ja" ? "通信エラー: " + e.message : "Network error: " + e.message);
+  }
 }
 
 // --- Helpers ---
@@ -373,6 +533,7 @@ function renderCard(habit) {
         <button class="btn-check ${btnClass}" ${todayDone || expired ? "disabled" : ""} data-action="check">
           ${btnText}
         </button>
+        ${xConnected && !expired ? `<button class="btn-x-post" data-action="xpost" title="${t("xPost")}">𝕏</button>` : ""}
       </div>
     </div>
   `;
@@ -409,6 +570,7 @@ function attachCardEvents() {
       if (action === "check") checkIn(id);
       else if (action === "edit") openEdit(id);
       else if (action === "delete") deleteHabit(id);
+      else if (action === "xpost") postToX(id);
     });
   });
 }
@@ -612,9 +774,19 @@ document.getElementById("langToggle").addEventListener("click", () => {
   render();
 });
 
+// --- X Button Event ---
+document.getElementById("xConnectBtn").addEventListener("click", () => {
+  if (xConnected) {
+    disconnectX();
+  } else {
+    startXOAuth();
+  }
+});
+
 // --- Init ---
 (async () => {
   await initAuth();
   await loadHabits();
+  await checkXConnection();
   render();
 })();

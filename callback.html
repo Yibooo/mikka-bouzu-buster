@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>X連携中... - 三日坊主バスター</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    margin: 0;
+    background: #f7f7f8;
+    color: #1a1a1a;
+  }
+  .container {
+    text-align: center;
+    padding: 40px 20px;
+    max-width: 400px;
+  }
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e5e7eb;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  h2 { font-size: 1.2rem; margin-bottom: 8px; }
+  p { color: #6b7280; font-size: 0.9rem; }
+  .success { color: #16a34a; }
+  .error { color: #dc2626; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <div class="spinner" id="spinner"></div>
+  <h2 id="title">X連携処理中...</h2>
+  <p id="message">しばらくお待ちください</p>
+</div>
+
+<script>
+(async () => {
+  const title = document.getElementById("title");
+  const message = document.getElementById("message");
+  const spinner = document.getElementById("spinner");
+
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  const state = params.get("state");
+  const error = params.get("error");
+
+  if (error) {
+    spinner.style.display = "none";
+    title.textContent = "連携がキャンセルされました";
+    title.className = "error";
+    message.textContent = "3秒後にダッシュボードに戻ります...";
+    setTimeout(() => { window.location.href = "/"; }, 3000);
+    return;
+  }
+
+  // Verify state
+  const savedState = sessionStorage.getItem("x_oauth_state");
+  if (!code || !state || state !== savedState) {
+    spinner.style.display = "none";
+    title.textContent = "エラー: 不正なリクエスト";
+    title.className = "error";
+    message.textContent = "state が一致しません。もう一度お試しください。";
+    setTimeout(() => { window.location.href = "/"; }, 3000);
+    return;
+  }
+
+  const codeVerifier = sessionStorage.getItem("x_code_verifier");
+  const redirectUri = `${window.location.origin}/callback.html`;
+
+  // Get current user
+  const SUPABASE_URL = "https://insrskeneuzkjfbbdikp.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_9ZjRkan7xPELsoQ2VJcv3A_wg13DQjr";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const { data: sessionData } = await sb.auth.getSession();
+  const userId = sessionData?.session?.user?.id;
+
+  if (!userId) {
+    spinner.style.display = "none";
+    title.textContent = "エラー: ログインが必要です";
+    title.className = "error";
+    message.textContent = "3秒後にダッシュボードに戻ります...";
+    setTimeout(() => { window.location.href = "/"; }, 3000);
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/x/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code,
+        code_verifier: codeVerifier,
+        redirect_uri: redirectUri,
+        user_id: userId,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      spinner.style.display = "none";
+      title.textContent = "X連携完了!";
+      title.className = "success";
+      message.textContent = data.x_username
+        ? `@${data.x_username} として連携しました。3秒後にダッシュボードに戻ります...`
+        : "3秒後にダッシュボードに戻ります...";
+    } else {
+      spinner.style.display = "none";
+      title.textContent = "連携に失敗しました";
+      title.className = "error";
+      message.textContent = data.error || "もう一度お試しください";
+    }
+  } catch (e) {
+    spinner.style.display = "none";
+    title.textContent = "通信エラー";
+    title.className = "error";
+    message.textContent = e.message;
+  }
+
+  // Cleanup
+  sessionStorage.removeItem("x_oauth_state");
+  sessionStorage.removeItem("x_code_verifier");
+
+  setTimeout(() => { window.location.href = "/"; }, 3000);
+})();
+</script>
+</body>
+</html>
