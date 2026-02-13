@@ -367,6 +367,25 @@ main {
   transform: translateX(-50%) translateY(0);
 }
 
+/* X Post Button */
+.btn-x-post {
+  background: #000;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .2s;
+  font-family: inherit;
+}
+.btn-x-post:hover { background: #333; }
+
+.btn-x-header {
+  font-weight: 700;
+}
+
 /* Responsive */
 @media (max-width: 500px) {
   header h1 { font-size: 1.2rem; }
