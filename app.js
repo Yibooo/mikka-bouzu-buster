@@ -243,8 +243,15 @@ function base64UrlEncode(bytes) {
 // --- X OAuth ---
 async function startXOAuth() {
   if (!currentUser) {
-    alert(lang === "ja" ? "ログインが必要です" : "Login required");
-    return;
+    // Try anonymous sign-in on demand
+    const { data, error } = await sb.auth.signInAnonymously();
+    if (!error && data.session) {
+      currentUser = data.session.user;
+      useCloud = true;
+    } else {
+      alert(lang === "ja" ? "認証に失敗しました。ページを再読み込みしてください。" : "Auth failed. Please reload the page.");
+      return;
+    }
   }
 
   const codeVerifier = generateCodeVerifier();
