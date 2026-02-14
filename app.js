@@ -187,15 +187,19 @@ async function saveHabit(habit) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
 
   if (useCloud && currentUser) {
-    await sb.from("habits").upsert({
-      id: habit.id,
-      user_id: currentUser.id,
-      name: habit.name,
-      period: habit.period,
-      deposit: 0,
-      start_date: habit.startDate,
-      result_shown: habit.resultShown || false,
-    });
+    try {
+      await sb.from("habits").upsert({
+        id: habit.id,
+        user_id: currentUser.id,
+        name: habit.name,
+        period: habit.period,
+        deposit: 0,
+        start_date: habit.startDate,
+        result_shown: habit.resultShown || false,
+      });
+    } catch (e) {
+      console.error("Cloud save failed:", e);
+    }
   }
 }
 
@@ -643,34 +647,40 @@ function updateOptionBtns() {
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const name = document.getElementById("habitNameInput").value.trim();
-  if (!name) return;
+  try {
+    const name = document.getElementById("habitNameInput").value.trim();
+    if (!name) return;
 
-  const days = selectedDays || Number(document.getElementById("customDays").value);
+    const days = selectedDays || Number(document.getElementById("customDays").value);
 
-  if (!days || days < 1) return alert(lang === "ja" ? "期間を設定してください" : "Set a period");
+    if (!days || days < 1) return alert(lang === "ja" ? "期間を設定してください" : "Set a period");
 
-  if (editingId) {
-    const h = habits.find((h) => h.id === editingId);
-    if (h) {
-      h.name = name;
-      h.period = days;
-      await saveHabit(h);
+    if (editingId) {
+      const h = habits.find((h) => h.id === editingId);
+      if (h) {
+        h.name = name;
+        h.period = days;
+        await saveHabit(h);
+      }
+    } else {
+      const newHabit = {
+        id: crypto.randomUUID(),
+        name,
+        period: days,
+        startDate: todayStr(),
+        checkedDays: [],
+        resultShown: false,
+      };
+      await saveHabit(newHabit);
     }
-  } else {
-    const newHabit = {
-      id: crypto.randomUUID(),
-      name,
-      period: days,
-      startDate: todayStr(),
-      checkedDays: [],
-      resultShown: false,
-    };
-    await saveHabit(newHabit);
-  }
 
-  closeModal();
-  render();
+    closeModal();
+    render();
+  } catch (err) {
+    console.error("Form submit error:", err);
+    closeModal();
+    render();
+  }
 });
 
 async function deleteHabit(id) {
