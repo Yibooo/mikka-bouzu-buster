@@ -425,8 +425,6 @@ function applyI18n() {
     lang === "ja" ? "例: 毎日走る" : "e.g. Run every day";
   document.getElementById("customDays").placeholder =
     lang === "ja" ? "カスタム" : "Custom";
-  document.getElementById("customDeposit").placeholder =
-    lang === "ja" ? "カスタム" : "Custom";
 }
 
 function renderDate() {
@@ -730,10 +728,31 @@ document.getElementById("xConnectBtn").addEventListener("click", () => {
   }
 });
 
+// --- Global Error Handler (debug) ---
+window.onerror = (msg, src, line, col, err) => {
+  const banner = document.createElement("div");
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#dc2626;color:#fff;padding:12px;font-size:13px;z-index:9999;word-break:break-all;";
+  banner.textContent = `⚠️ Error: ${msg} (${src}:${line}:${col})`;
+  document.body.prepend(banner);
+};
+window.onunhandledrejection = (e) => {
+  const banner = document.createElement("div");
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#dc2626;color:#fff;padding:12px;font-size:13px;z-index:9999;word-break:break-all;";
+  banner.textContent = `⚠️ Async Error: ${e.reason}`;
+  document.body.prepend(banner);
+};
+
 // --- Init ---
 (async () => {
-  await initAuth();
-  await loadHabits();
-  await checkXConnection();
-  render();
+  try {
+    await initAuth();
+    await loadHabits();
+    await checkXConnection();
+    render();
+  } catch (e) {
+    console.error("Init error:", e);
+    // Fallback: load from localStorage only
+    habits = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    render();
+  }
 })();
