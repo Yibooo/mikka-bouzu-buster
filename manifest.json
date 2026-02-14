@@ -1,7 +1,7 @@
 {
   "name": "三日坊主バスター",
   "short_name": "坊主バスター",
-  "description": "習慣を守れなかったらデポジット没収! 三日坊主を本気で防止するWebアプリ。",
+  "description": "キャラを育てて三日坊主を本気で防止するWebアプリ。",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f7f8",

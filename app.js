@@ -47,12 +47,11 @@ async function initAuth() {
 const i18n = {
   ja: {
     appName: "三日坊主バスター",
-    subtitle: "習慣を守れなかったら、デポジット没収!",
+    subtitle: "キャラを育てて、三日坊主を卒業しよう!",
     addHabit: "+ 習慣を追加",
     editHabit: "習慣を編集",
     habitName: "習慣名",
     challengePeriod: "チャレンジ期間",
-    depositAmount: "デポジット金額（擬似）",
     days: "日",
     save: "保存",
     cancel: "キャンセル",
@@ -67,12 +66,9 @@ const i18n = {
     deleteConfirm: "この習慣を削除しますか？",
     streak: "日連続",
     dayLeft: "日残り",
-    deposit: "デポジット",
     rate: "達成率",
     resultSuccess: "チャレンジ成功!",
     resultFail: "チャレンジ失敗...",
-    depositSaved: "デポジットを守りました!",
-    depositLost: "デポジットが寄付されました",
     praise: [
       "すごい! 今日もやったね!",
       "がんばったね! 最高!",
@@ -94,12 +90,11 @@ const i18n = {
   },
   en: {
     appName: "Habit Buster",
-    subtitle: "Miss your habit? Lose your deposit!",
+    subtitle: "Grow your character by building habits!",
     addHabit: "+ Add Habit",
     editHabit: "Edit Habit",
     habitName: "Habit Name",
     challengePeriod: "Challenge Period",
-    depositAmount: "Deposit Amount (mock)",
     days: "d",
     save: "Save",
     cancel: "Cancel",
@@ -114,12 +109,9 @@ const i18n = {
     deleteConfirm: "Delete this habit?",
     streak: " day streak",
     dayLeft: "d left",
-    deposit: "Deposit",
     rate: "Rate",
     resultSuccess: "Challenge Complete!",
     resultFail: "Challenge Failed...",
-    depositSaved: "Your deposit is safe!",
-    depositLost: "Your deposit was donated",
     praise: [
       "Awesome! You did it!",
       "Great job! Keep it up!",
@@ -174,7 +166,6 @@ async function loadHabits() {
         id: h.id,
         name: h.name,
         period: h.period,
-        deposit: h.deposit,
         startDate: h.start_date,
         checkedDays: checkinMap[h.id] || [],
         resultShown: h.result_shown || false,
@@ -201,7 +192,6 @@ async function saveHabit(habit) {
       user_id: currentUser.id,
       name: habit.name,
       period: habit.period,
-      deposit: habit.deposit,
       start_date: habit.startDate,
       result_shown: habit.resultShown || false,
     });
@@ -505,7 +495,6 @@ function renderCard(habit) {
       <div class="habit-meta">
         ${streak > 0 ? `<span class="streak-badge">🔥 ${streak}${t("streak")}</span>` : ""}
         <span>📅 ${left}${t("dayLeft")}</span>
-        <span>💰 ¥${habit.deposit.toLocaleString()}</span>
         <span>${t("rate")}: ${rate}%</span>
       </div>
       <div class="progress-bar">
@@ -593,7 +582,6 @@ function showToast(msg) {
 const modal = document.getElementById("habitModal");
 const form = document.getElementById("habitForm");
 let selectedDays = null;
-let selectedDeposit = null;
 
 document.getElementById("addHabitBtn").addEventListener("click", () => openAdd());
 document.getElementById("modalCancel").addEventListener("click", () => closeModal());
@@ -604,7 +592,6 @@ function openAdd() {
   document.getElementById("modalTitle").textContent = t("addHabit");
   form.reset();
   selectedDays = null;
-  selectedDeposit = null;
   updateOptionBtns();
   modal.hidden = false;
 }
@@ -625,15 +612,6 @@ function openEdit(id) {
     document.getElementById("customDays").value = h.period;
   }
 
-  const stdDep = [1000, 3000, 5000];
-  if (stdDep.includes(h.deposit)) {
-    selectedDeposit = h.deposit;
-    document.getElementById("customDeposit").value = "";
-  } else {
-    selectedDeposit = null;
-    document.getElementById("customDeposit").value = h.deposit;
-  }
-
   updateOptionBtns();
   modal.hidden = false;
 }
@@ -651,30 +629,14 @@ document.querySelectorAll(".period-btn").forEach((btn) => {
   });
 });
 
-document.querySelectorAll(".deposit-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    selectedDeposit = Number(btn.dataset.amount);
-    document.getElementById("customDeposit").value = "";
-    updateOptionBtns();
-  });
-});
-
 document.getElementById("customDays").addEventListener("input", () => {
   selectedDays = null;
-  updateOptionBtns();
-});
-
-document.getElementById("customDeposit").addEventListener("input", () => {
-  selectedDeposit = null;
   updateOptionBtns();
 });
 
 function updateOptionBtns() {
   document.querySelectorAll(".period-btn").forEach((btn) => {
     btn.classList.toggle("active", Number(btn.dataset.days) === selectedDays);
-  });
-  document.querySelectorAll(".deposit-btn").forEach((btn) => {
-    btn.classList.toggle("active", Number(btn.dataset.amount) === selectedDeposit);
   });
 }
 
@@ -684,17 +646,14 @@ form.addEventListener("submit", async (e) => {
   if (!name) return;
 
   const days = selectedDays || Number(document.getElementById("customDays").value);
-  const deposit = selectedDeposit ?? Number(document.getElementById("customDeposit").value);
 
   if (!days || days < 1) return alert(lang === "ja" ? "期間を設定してください" : "Set a period");
-  if (deposit == null || deposit < 0) return alert(lang === "ja" ? "金額を設定してください" : "Set an amount");
 
   if (editingId) {
     const h = habits.find((h) => h.id === editingId);
     if (h) {
       h.name = name;
       h.period = days;
-      h.deposit = deposit;
       await saveHabit(h);
     }
   } else {
@@ -702,7 +661,6 @@ form.addEventListener("submit", async (e) => {
       id: crypto.randomUUID(),
       name,
       period: days,
-      deposit,
       startDate: todayStr(),
       checkedDays: [],
       resultShown: false,
@@ -732,11 +690,7 @@ function showResult(habit) {
     <div class="result-icon">${success ? "🎉" : "😢"}</div>
     <div class="result-stats">
       <strong>${habit.name}</strong><br>
-      ${t("rate")}: ${rate}% (${checked}/${totalDays}${t("days")})<br>
-      ${t("deposit")}: ¥${habit.deposit.toLocaleString()}
-    </div>
-    <div class="result-message ${success ? "success" : "fail"}">
-      ${success ? t("depositSaved") : t("depositLost")}
+      ${t("rate")}: ${rate}% (${checked}/${totalDays}${t("days")})
     </div>
   `;
   rModal.hidden = false;
