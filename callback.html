@@ -109,7 +109,7 @@
       spinner.style.display = "none";
       title.textContent = "連携に失敗しました";
       title.className = "error";
-      message.textContent = data.error || "もう一度お試しください";
+      message.textContent = (data.error || "もう一度お試しください") + (data.detail ? `\n[詳細] ${data.detail}` : "");
     }
   } catch (e) {
     spinner.style.display = "none";
