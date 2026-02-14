@@ -192,6 +192,7 @@ async function saveHabit(habit) {
       user_id: currentUser.id,
       name: habit.name,
       period: habit.period,
+      deposit: 0,
       start_date: habit.startDate,
       result_shown: habit.resultShown || false,
     });
