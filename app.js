@@ -10,7 +10,7 @@ let currentUser = null;
 let useCloud = false;
 
 // --- X (Twitter) Integration ---
-const X_CLIENT_ID = "MWJmNVl2aktfUGptdXJHeTh1V2k6MTpjaQ";
+const X_CLIENT_ID = "WF9xaEpqRmRqWmxMZE1kNjNjbHg6MTpjaQ";
 const SITE_URL = "https://mikka-bouzu-buster.com";
 let xConnected = false;
 let xUsername = "";
