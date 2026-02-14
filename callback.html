@@ -99,12 +99,38 @@
     const data = await res.json();
 
     if (data.success) {
-      spinner.style.display = "none";
-      title.textContent = "X連携完了!";
-      title.className = "success";
-      message.textContent = data.x_username
-        ? `@${data.x_username} として連携しました。3秒後にダッシュボードに戻ります...`
-        : "3秒後にダッシュボードに戻ります...";
+      // 初回ツイートを自動投稿
+      const username = data.x_username ? `@${data.x_username}` : "";
+      const tweetText = `🐣 三日坊主バスターを始めました！\n\nヒヨコからスタート🥚→🐣→🐥→🦅→🐉\n習慣を続けてキャラを育てます！\n\n#三日坊主バスター\nhttps://mikka-bouzu-buster.com`;
+
+      try {
+        const tweetRes = await fetch("/api/x/tweet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, text: tweetText }),
+        });
+        const tweetData = await tweetRes.json();
+
+        spinner.style.display = "none";
+        title.textContent = "X連携完了!";
+        title.className = "success";
+        if (tweetData.success) {
+          message.textContent = username
+            ? `${username} として連携し、初回ツイートを投稿しました🎉\n5秒後にダッシュボードに戻ります...`
+            : "連携完了＆初回ツイートを投稿しました🎉\n5秒後にダッシュボードに戻ります...";
+        } else {
+          message.textContent = username
+            ? `${username} として連携しました（ツイート投稿は失敗: ${tweetData.error || "不明"}）\n5秒後にダッシュボードに戻ります...`
+            : "連携完了（ツイート投稿は失敗）\n5秒後にダッシュボードに戻ります...";
+        }
+      } catch (tweetErr) {
+        spinner.style.display = "none";
+        title.textContent = "X連携完了!";
+        title.className = "success";
+        message.textContent = username
+          ? `${username} として連携しました（初回ツイートは通信エラー）\n5秒後にダッシュボードに戻ります...`
+          : "連携完了（初回ツイートは通信エラー）\n5秒後にダッシュボードに戻ります...";
+      }
     } else {
       spinner.style.display = "none";
       title.textContent = "連携に失敗しました";
@@ -122,7 +148,7 @@
   sessionStorage.removeItem("x_oauth_state");
   sessionStorage.removeItem("x_code_verifier");
 
-  setTimeout(() => { window.location.href = "/"; }, 3000);
+  setTimeout(() => { window.location.href = "/"; }, 5000);
 })();
 </script>
 </body>

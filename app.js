@@ -363,7 +363,7 @@ async function postToX(habitId) {
     if (data.success) {
       showToast(lang === "ja" ? "Xに投稿しました!" : "Posted to X!");
     } else {
-      alert(data.error || (lang === "ja" ? "投稿に失敗しました" : "Failed to post"));
+      alert((data.error || (lang === "ja" ? "投稿に失敗しました" : "Failed to post")) + (data.detail ? "\n[詳細] " + data.detail : ""));
     }
   } catch (e) {
     alert(lang === "ja" ? "通信エラー: " + e.message : "Network error: " + e.message);
