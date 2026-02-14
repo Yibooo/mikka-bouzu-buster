@@ -341,33 +341,13 @@ function composeTweet(habit) {
   return text;
 }
 
-async function postToX(habitId) {
+function postToX(habitId) {
   const habit = habits.find((h) => h.id === habitId);
   if (!habit) return;
 
   const draft = composeTweet(habit);
-  const msg = lang === "ja"
-    ? `以下の内容をXに投稿します:\n\n${draft}\n\n投稿しますか？`
-    : `Post to X:\n\n${draft}\n\nProceed?`;
-
-  if (!confirm(msg)) return;
-
-  try {
-    const res = await fetch("/api/x/tweet", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: getDeviceId(), text: draft }),
-    });
-    const data = await res.json();
-
-    if (data.success) {
-      showToast(lang === "ja" ? "Xに投稿しました!" : "Posted to X!");
-    } else {
-      alert((data.error || (lang === "ja" ? "投稿に失敗しました" : "Failed to post")) + (data.detail ? "\n[詳細] " + data.detail : ""));
-    }
-  } catch (e) {
-    alert(lang === "ja" ? "通信エラー: " + e.message : "Network error: " + e.message);
-  }
+  const intentUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(draft)}`;
+  window.open(intentUrl, "_blank", "width=550,height=420");
 }
 
 // --- Helpers ---
@@ -535,7 +515,7 @@ function renderCard(habit) {
         <button class="btn-check ${btnClass}" ${todayDone || expired ? "disabled" : ""} data-action="check">
           ${btnText}
         </button>
-        ${xConnected && !expired ? `<button class="btn-x-post" data-action="xpost" title="${t("xPost")}">𝕏</button>` : ""}
+        ${!expired ? `<button class="btn-x-post" data-action="xpost" title="${t("xPost")}">𝕏</button>` : ""}
       </div>
     </div>
   `;

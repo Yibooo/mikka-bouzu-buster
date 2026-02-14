@@ -99,38 +99,18 @@
     const data = await res.json();
 
     if (data.success) {
-      // 初回ツイートを自動投稿
       const username = data.x_username ? `@${data.x_username}` : "";
-      const tweetText = `🐣 三日坊主バスターを始めました！\n\nヒヨコからスタート🥚→🐣→🐥→🦅→🐉\n習慣を続けてキャラを育てます！\n\n#三日坊主バスター\nhttps://mikka-bouzu-buster.com`;
+      spinner.style.display = "none";
+      title.textContent = "X連携完了! 🎉";
+      title.className = "success";
 
-      try {
-        const tweetRes = await fetch("/api/x/tweet", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, text: tweetText }),
-        });
-        const tweetData = await tweetRes.json();
+      // シェアボタン方式で初回ツイートを促す
+      const tweetText = "🐣 三日坊主バスターを始めました！\n\nヒヨコからスタート🥚→🐣→🐥→🦅→🐉\n習慣を続けてキャラを育てます！\n\n#三日坊主バスター\nhttps://mikka-bouzu-buster.com";
+      const intentUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
 
-        spinner.style.display = "none";
-        title.textContent = "X連携完了!";
-        title.className = "success";
-        if (tweetData.success) {
-          message.textContent = username
-            ? `${username} として連携し、初回ツイートを投稿しました🎉\n5秒後にダッシュボードに戻ります...`
-            : "連携完了＆初回ツイートを投稿しました🎉\n5秒後にダッシュボードに戻ります...";
-        } else {
-          message.textContent = username
-            ? `${username} として連携しました（ツイート投稿は失敗: ${tweetData.error || "不明"}）\n5秒後にダッシュボードに戻ります...`
-            : "連携完了（ツイート投稿は失敗）\n5秒後にダッシュボードに戻ります...";
-        }
-      } catch (tweetErr) {
-        spinner.style.display = "none";
-        title.textContent = "X連携完了!";
-        title.className = "success";
-        message.textContent = username
-          ? `${username} として連携しました（初回ツイートは通信エラー）\n5秒後にダッシュボードに戻ります...`
-          : "連携完了（初回ツイートは通信エラー）\n5秒後にダッシュボードに戻ります...";
-      }
+      message.innerHTML = (username ? `${username} として連携しました。<br><br>` : "") +
+        `<a href="${intentUrl}" target="_blank" style="display:inline-block;background:#000;color:#fff;padding:10px 24px;border-radius:24px;text-decoration:none;font-weight:bold;margin:12px 0;">𝕏 始めたことをポストする</a>` +
+        `<br><small style="color:#6b7280;">5秒後にダッシュボードに戻ります...</small>`;
     } else {
       spinner.style.display = "none";
       title.textContent = "連携に失敗しました";
